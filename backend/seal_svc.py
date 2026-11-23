@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 
 from auth import AuthHeader, require_user, require_writer
 from db import connect, now_iso, write_audit
+from lineage_svc import ensure_lineage_governance, formal_lineage_for_batch
 from locks import release, require_lock
 from models import SealIn
 from validators import require_calibration_fresh, validate_batch_sealable
@@ -30,6 +31,7 @@ def seal_batch(body: SealIn, authorization: AuthHeader = None):
     user = require_writer(authorization)
     lock_key = f"batch:{body.batch_id}"
     with connect() as conn:
+        ensure_lineage_governance(conn)
         require_lock(conn, lock_key, user)
         try:
             batch = conn.execute(
@@ -50,6 +52,7 @@ def seal_batch(body: SealIn, authorization: AuthHeader = None):
             validate_batch_sealable(bdict, open_exc)
             require_calibration_fresh(batch)
             gen = int(batch["generation"])
+            lineage_snap = formal_lineage_for_batch(conn, body.batch_id)
             manifest = body.manifest or json.dumps(
                 {
                     "batch_code": batch["batch_code"],
@@ -57,6 +60,24 @@ def seal_batch(body: SealIn, authorization: AuthHeader = None):
                     "point_count": len(json.loads(batch["temp_points"] or "[]")),
                     "min": batch["min_observed"],
                     "max": batch["max_observed"],
+                    "lineage": {
+                        "inbound": [
+                            {
+                                "edge_id": e["id"],
+                                "from_code": e["from_code"],
+                                "from_generation": e["from_generation"],
+                            }
+                            for e in lineage_snap["inbound"]
+                        ],
+                        "outbound": [
+                            {
+                                "edge_id": e["id"],
+                                "to_code": e["to_code"],
+                                "to_generation": e["to_generation"],
+                            }
+                            for e in lineage_snap["outbound"]
+                        ],
+                    },
                 },
                 ensure_ascii=False,
             )

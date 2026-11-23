@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 
 from auth import AuthHeader, require_user, require_writer
 from db import connect, now_iso, write_audit
+from lineage_svc import ensure_lineage_governance, formal_lineage_for_batch
 from locks import release, require_lock
 from models import BatchIn
 from validators import summarize_points, validate_probe_online, validate_temp_point
@@ -57,6 +58,7 @@ def list_batches(authorization: AuthHeader = None, status: str | None = None):
 def get_batch(batch_id: int, authorization: AuthHeader = None):
     require_user(authorization)
     with connect() as conn:
+        ensure_lineage_governance(conn)
         row = conn.execute(
             """SELECT b.*, c.name chamber_name, c.target_min, c.target_max, p.probe_code
                FROM temp_batches b
@@ -80,6 +82,7 @@ def get_batch(batch_id: int, authorization: AuthHeader = None):
             "batch": data,
             "excursions": [dict(e) for e in exc],
             "seals": [dict(s) for s in seals],
+            "lineage": formal_lineage_for_batch(conn, batch_id),
         }
 
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 
 from auth import AuthHeader, require_user, require_writer
 from db import connect, now_iso, write_audit
+from lineage_svc import ensure_lineage_governance, fake_connections_for_batch
 from models import SpectrumIn
 
 router = APIRouter(tags=["spectrum"])
@@ -35,6 +36,18 @@ def export_spectrum(body: SpectrumIn, authorization: AuthHeader = None):
             raise HTTPException(404, "批次不存在")
         if batch["status"] != "已封批":
             raise HTTPException(409, "须先封批再导出温谱")
+        ensure_lineage_governance(conn)
+        fakes = fake_connections_for_batch(conn, body.batch_id)
+        if fakes:
+            write_audit(
+                conn,
+                user,
+                "spectrum_reject",
+                batch["batch_code"],
+                {"fake_edge_ids": [f["id"] for f in fakes]},
+            )
+            conn.commit()
+            raise HTTPException(409, "存在跨代伪连，禁止导出温谱")
         points = json.loads(batch["temp_points"] or "[]")
         payload = json.dumps(
             {

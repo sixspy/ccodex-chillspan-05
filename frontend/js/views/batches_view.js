@@ -35,6 +35,28 @@ export const batchesViewTemplate = `
   <div v-if="batchDetail" class="detail-box">
     <h3>{{ batchDetail.batch.batch_code }} · {{ batchDetail.batch.cargo_ref }}</h3>
     <p>点数 {{ batchDetail.batch.temp_points.length }} · 游标 {{ batchDetail.excursions.length }} 条</p>
+    <div v-if="batchDetail.lineage">
+      <p>正式血缘 · 下游 {{ batchDetail.lineage.outbound.length }} 条 · 上游 {{ batchDetail.lineage.inbound.length }} 条</p>
+      <table class="data-table compact">
+        <thead><tr><th>方向</th><th>对端</th><th>对端代</th><th>类型</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr v-for="e in batchDetail.lineage.outbound" :key="'o'+e.id">
+            <td>出</td>
+            <td>{{ e.to_code || "—" }}</td>
+            <td>{{ e.to_generation || "—" }}</td>
+            <td>{{ e.edge_type }}</td>
+            <td>{{ e.status || "正式" }}</td>
+          </tr>
+          <tr v-for="e in batchDetail.lineage.inbound" :key="'i'+e.id">
+            <td>入</td>
+            <td>{{ e.from_code }}</td>
+            <td>{{ e.from_generation || "—" }}</td>
+            <td>{{ e.edge_type }}</td>
+            <td>{{ e.status || "正式" }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 `;
